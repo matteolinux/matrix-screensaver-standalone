@@ -137,92 +137,90 @@ Monroe Williams has granted permission to include the original `Matrix.saver` in
 
 # Matrix Screensaver Standalone - Italiano
 
-Wrapper macOS standalone per lo screensaver Matrix di Monroe Williams.
+# Wrapper macOS standalone per lo screensaver Matrix di Monroe Williams
 
-Questo progetto **non** sostituisce il motore grafico originale. Fornisce una piccola app Cocoa wrapper che può incorporare e avviare il `Matrix.saver` originale come normale app/menu bar utility, senza installarlo dalle Impostazioni di Sistema come screensaver classico.
+Questo progetto NON sostituisce il motore grafico originale. Fornisce invece una piccola app Cocoa che funge da wrapper per incorporare e avviare il `Matrix.saver` originale come una normale applicazione o utility nella barra dei menu, senza doverlo installare dalle Impostazioni di Sistema come un classico screensaver.
 
 Progetto originale: <https://github.com/monroewilliams/MatrixDownload>
 
-Il repository sorgente non include intenzionalmente il `Matrix.saver` di Monroe Williams. Per compilare da sorgente, scaricalo dal progetto originale. I DMG di release possono includere il `.saver` originale con il permesso di Monroe.
+Il repository dei sorgenti esclude intenzionalmente il `Matrix.saver` di Monroe Williams. Per compilare dal codice sorgente, è necessario scaricarlo dal progetto originale. I file DMG delle release possono invece includere il `.saver` originale, grazie all'autorizzazione concessa da Monroe.
 
-## Perché
+## Motivazione
 
-Le versioni recenti di macOS eseguono gli screensaver di terze parti tramite il processo Apple `legacyScreenSaver`. Il progetto originale Matrix documenta instabilità lato Apple intorno a quel processo, inclusi casi in cui CPU o memoria possono crescere dopo l'invocazione di screensaver legacy o di terze parti. Il problema è stato osservato su macOS moderni con screensaver legacy/terze parti e non va descritto come certamente limitato ad Apple Silicon.
+Le versioni recenti di macOS eseguono gli screensaver di terze parti tramite il processo di sistema `legacyScreenSaver`. Il progetto Matrix originale riporta alcune instabilità di macOS legate a questo processo, tra cui un consumo anomalo e crescente di CPU o memoria in seguito all'avvio di screensaver legacy o di terze parti. Il problema si verifica sulle versioni recenti di macOS e non sembra essere limitato esclusivamente all'architettura Apple Silicon.
 
-Questo wrapper evita quel percorso:
+Questo wrapper aggira il problema:
 
-- carica direttamente `Matrix.saver` da un normale processo app;
-- crea finestre fullscreen borderless su tutti gli schermi;
-- espone i settings con una piccola finestra propria;
-- può restare disponibile dalla barra dei menu di macOS.
+- caricando direttamente `Matrix.saver` da un normale processo applicativo;
+- creando finestre a schermo intero e senza bordi su tutti i monitor;
+- fornendo una piccola finestra dedicata per le impostazioni;
+- rimanendo accessibile direttamente dalla barra dei menu di macOS.
 
-## Download E Installazione
+## Download e Installazione
 
-Scarica il DMG dalla pagina GitHub Releases:
+Scarica il file DMG dalla pagina delle Release su GitHub:
 
 ```text
 Matrix-Screensaver.dmg
 ```
 
-Apri il DMG e trascina `Matrix Screensaver.app` su `Applications`.
+Apri il DMG e trascina `Matrix Screensaver.app` nella cartella `Applicazioni`.
 
-Se la build non è firmata con Developer ID e notarizzata, macOS Gatekeeper potrebbe richiedere tasto destro > Apri al primo avvio.
+Poiché la build potrebbe non essere firmata con un Developer ID e non autenticata (notarized) da Apple, al primo avvio macOS Gatekeeper potrebbe bloccare l'app. Per aprirla, fai clic destro sull'applicazione e seleziona **Apri**.
 
-## Uso
+## Utilizzo
 
 Apri `Matrix Screensaver.app`.
 
-Compare una `M` nella barra dei menu.
+Comparirà una `M` nella barra dei menu di macOS.
 
 Azioni disponibili:
 
-- `Start Matrix`: avvia l'animazione fullscreen.
-- `Settings...`: apre il pannello settings standalone.
-- `Quit`: chiude la menu bar app.
+- `Start Matrix`: avvia l'animazione a schermo intero.
+- `Settings...`: apre il pannello indipendente delle impostazioni.
+- `Quit`: chiude l'applicazione dalla barra dei menu.
 
-Quando Matrix è in esecuzione, la shortcut di uscita configurata lo ferma. Se non è configurata una shortcut custom, qualsiasi tasto esce di default e anche i tasti modificatori escono. L'uscita tramite mouse, inclusi movimento, click e scroll, si abilita o disabilita nei Settings. La app nella barra dei menu resta attiva.
+Mentre Matrix è in esecuzione, è possibile interromperlo utilizzando la scorciatoia da tastiera configurata. Se non è stata impostata alcuna scorciatoia personalizzata, per impostazione predefinita l'animazione si chiuderà premendo qualsiasi tasto (inclusi i tasti modificatori). L'interruzione dell'animazione tramite mouse (movimento, clic o scorrimento) può essere abilitata o disabilitata dalle Impostazioni. L'app nella barra dei menu rimarrà comunque attiva.
 
-## Settings
+## Impostazioni
 
-Il wrapper scrive i settings nello stesso modulo `ScreenSaverDefaults` usato dallo screensaver originale:
+Il wrapper salva le impostazioni nello stesso modulo `ScreenSaverDefaults` utilizzato dallo screensaver originale:
 
 ```text
 org.indirect.screensaver.Matrix
 ```
 
-Supportati:
+Impostazioni supportate:
 
-- `3D fade`: abilita o disabilita l'effetto 3D fade originale.
-- Dimensione glyph: Small / Medium / Large.
-- Tre colori dei glyph: colore primario, secondario e highlight usati dall'animazione.
-- Shortcut da tastiera per uscire: registra una combinazione modificatore + tasto, per esempio Command + M.
-- Reset shortcut: rimuove la shortcut custom e ripristina l'uscita di default con qualsiasi tasto.
-- Uscita tramite mouse: abilita o disabilita uscita con movimento, click e scroll.
+- **3D fade (Dissolvenza 3D)**: abilita o disabilita l'effetto di dissolvenza 3D originale.
+- **Dimensione dei glifi (Glyph size)**: Piccolo (Small) / Medio (Medium) / Grande (Large).
+- **Colori dei glifi**: colore primario, secondario e di evidenziazione (highlight) utilizzati nell'animazione.
+- **Scorciatoia da tastiera per uscire**: permette di registrare una combinazione tasto modificatore + tasto (es. Command + M).
+- **Ripristino scorciatoia (Reset shortcut)**: rimuove la scorciatoia personalizzata e ripristina l'uscita predefinita con qualsiasi tasto.
+- **Uscita tramite mouse**: abilita o disabilita la chiusura dell'animazione tramite movimento del mouse, clic e scorrimento.
 
-Quando Matrix è in esecuzione, la shortcut configurata chiude l'animazione fullscreen. Se non è configurata una shortcut custom, qualsiasi tasto esce di default e anche i tasti modificatori escono. L'uscita tramite mouse, inclusi movimento, click e scroll, si abilita o disabilita.
+> **Nota:** Durante l'esecuzione, la scorciatoia configurata interrompe l'animazione a schermo intero. Se non ne è configurata una, la pressione di qualsiasi tasto chiuderà l'animazione di default. È possibile configurare in modo indipendente anche la reazione agli input del mouse.
 
-## Compilazione Da Sorgente
+## Compilazione dal Codice Sorgente
 
 Requisiti:
 
 - macOS
 - Xcode Command Line Tools
 
-Questo repository tiene il `Matrix.saver` originale fuori dal controllo sorgente. Scaricalo dal progetto originale di Monroe Williams e metti il bundle nella root del repository:
+Questo repository esclude volutamente il `Matrix.saver` originale dal controllo di versione. Scaricalo dal progetto originale di Monroe Williams e posiziona il bundle nella cartella principale (root) del repository:
 
 ```text
 Matrix.saver
 ```
 
 Progetto originale:
-
 <https://github.com/monroewilliams/MatrixDownload>
 
 Release:
-
 <https://github.com/monroewilliams/MatrixDownload/releases>
 
-Compila la app:
+Compila l'app:
 
 ```bash
 scripts/build_app.sh
@@ -240,32 +238,31 @@ Output:
 dist/Matrix-Screensaver.dmg
 ```
 
-## Firma E Notarizzazione
+## Firma e Autenticazione (Notarization)
 
-Lo script incluso firma ad-hoc:
+Lo script incluso esegue una firma ad-hoc:
 
 ```bash
 codesign --force --sign - "Matrix Screensaver.app"
 ```
 
-Per una distribuzione pubblica senza avvisi Gatekeeper, firma con certificato Apple Developer ID e notarizza app/DMG.
+Per una distribuzione pubblica senza avvisi da parte di Gatekeeper, è necessario firmare il pacchetto con un certificato Apple Developer ID e far autenticare (notarize) l'app e il file DMG.
 
-## Attribuzione
+## Riconoscimenti
 
-Il motore dello screensaver Matrix è di Monroe Williams:
-
+Il motore grafico dello screensaver Matrix è stato creato da Monroe Williams:
 <https://github.com/monroewilliams/MatrixDownload>
 
-Questo repository fornisce launcher standalone, wrapper menu bar, gestione settings, icona app e packaging DMG intorno allo screensaver originale.
+Questo repository fornisce esclusivamente un launcher standalone, un wrapper per la barra dei menu, la gestione delle impostazioni, l'icona dell'applicazione e la pacchettizzazione in formato DMG per lo screensaver originale.
 
-Non contattare Monroe Williams per problemi con questa app wrapper. Bug del wrapper, packaging, comportamento menu bar, UI settings e distribuzione sono mantenuti da questo progetto.
+Si prega di non contattare Monroe Williams per problemi relativi a questa app wrapper. I bug del wrapper, la pacchettizzazione, il comportamento della barra dei menu, l'interfaccia delle impostazioni e la distribuzione sono gestiti unicamente da questo progetto.
 
-## Fork O Repository Separato?
+## Fork o Repository Separato?
 
-Un repository separato è in genere più chiaro, perché questo progetto è un wrapper/pacchetto distributivo, non una modifica al sorgente originale dello screensaver.
+Mantenere un repository separato è generalmente la scelta più chiara, poiché questo progetto funge da wrapper e pacchetto di distribuzione, non da modifica al codice sorgente originale dello screensaver.
 
-Un fork di `monroewilliams/MatrixDownload` ha senso solo se vuoi proporre questa modalità di packaging upstream o mantenere una relazione diretta di fork su GitHub.
+Effettuare un fork di `monroewilliams/MatrixDownload` avrebbe senso solo qualora si volesse proporre questa modalità di pacchettizzazione al progetto originale (upstream) o per mantenere un collegamento visibile di fork direttamente su GitHub.
 
-## Nota Licenza / Redistribuzione
+## Nota sulla Licenza / Ridistribuzione
 
-Monroe Williams ha dato permesso di includere il `Matrix.saver` originale nel pacchetto di questo wrapper. Mantieni l'attribuzione chiara al progetto originale e chiarisci che il supporto per la app wrapper viene gestito qui, non dall'autore dello screensaver originale.
+Monroe Williams ha concesso il permesso di includere il `Matrix.saver` originale nel pacchetto di questo wrapper. Si prega di mantenere chiara l'attribuzione al progetto originale e di specificare che il supporto tecnico per questa app wrapper viene gestito in questa sede, e non dall'autore dello screensaver originale.
