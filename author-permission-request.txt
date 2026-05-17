@@ -1,0 +1,46 @@
+Subject: Permission to publish a standalone wrapper for Matrix Screensaver
+
+Hi Monroe,
+
+First of all, thank you for your Matrix screensaver. I really like it and wanted to keep using it on recent macOS versions.
+
+Because of the known `legacyScreenSaver` issue you mention in your release notes, I experimented with an alternative approach: instead of installing `Matrix.saver` through System Settings, I built a small standalone macOS wrapper app that loads your `Matrix.saver` directly and displays it fullscreen.
+
+The wrapper does not modify your screensaver engine. It uses your original `Matrix.saver` bundle as the rendering component, but runs it from a normal Cocoa app process instead of Apple's `legacyScreenSaver` process.
+
+What I added:
+
+- a standalone `Matrix Screensaver.app`;
+- a menu bar item to start the screensaver;
+- a small settings window for color, glyph size, and 3D fade;
+- packaging as a `.dmg` with drag-to-Applications installation;
+- build/package scripts and documentation;
+- attribution to you and a link to your original project.
+
+The reason for this approach is to avoid the macOS `legacyScreenSaver` path, while still preserving your original Matrix screensaver behavior.
+
+Before publishing anything, I wanted to ask for your permission.
+
+Would you be comfortable with me publishing:
+
+1. the source code for the standalone wrapper; and
+2. a downloadable `.dmg` that includes your original `Matrix.saver` embedded inside the app?
+
+I would clearly credit you as the author of the original Matrix screensaver and link back to your GitHub repository and releases.
+
+If you prefer, I can also publish only the wrapper source and require users to download `Matrix.saver` separately from your official releases.
+
+Thanks again for your work.
+
+Best,
+Matteo
+
+---
+
+Author response:
+
+"Sounds like a useful workaround! :)
+
+Feel free to include the original .saver in your package. Just please make it clear that people should not contact me if they have issues with the wrapper app, that's all you. ;)
+
+-- monroe"

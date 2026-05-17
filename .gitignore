@@ -1,0 +1,22 @@
+.DS_Store
+.dmg-staging/
+.matrix-screensaver-host
+
+# Local project notes used during development.
+memory.md
+TODO.md
+
+# Local downloads / extracted upstream releases
+.matrix-download-*/
+
+# Generated app and distributable artifacts.
+# Prefer uploading DMGs to GitHub Releases instead of committing them.
+Matrix Screensaver.app/
+dist/
+
+# Optional: keep Matrix.saver out of source unless redistribution is explicitly allowed.
+Matrix.saver/
+
+# Swift build products, if this is later converted to a package/project.
+.build/
+DerivedData/
