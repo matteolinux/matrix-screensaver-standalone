@@ -1,9 +1,18 @@
 import Cocoa
+import LocalAuthentication
 import ScreenSaver
 
 private let exitShortcutKeyCodeKey = "StandaloneExitShortcutKeyCode"
 private let exitShortcutModifierFlagsKey = "StandaloneExitShortcutModifierFlags"
 private let exitOnMouseMovementKey = "StandaloneExitOnMouseMovement"
+private let exitRequiresTouchIDKey = "StandaloneExitRequiresTouchID"
+
+fileprivate enum ExitRequestSource {
+    case keyboard
+    case modifier
+    case mouseInput
+    case mouseMovement
+}
 
 fileprivate struct ExitShortcut {
     let keyCode: UInt16
@@ -235,8 +244,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var cellSizePopup: NSPopUpButton?
     private var shortcutRecorder: ShortcutRecorderButton?
     private var mouseMovementCheckbox: NSButton?
+    private var touchIDCheckbox: NSButton?
     private var colorWells: [NSColorWell] = []
     private var exitOnMouseMovement = true
+    private var exitRequiresTouchID = false
+    private var touchIDAuthenticationInProgress = false
     private var mouseMovementExitArmedAt = Date.distantPast
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -415,6 +427,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         let exitShortcut = Self.savedExitShortcut()
         exitOnMouseMovement = Self.savedExitOnMouseMovement()
+        exitRequiresTouchID = Self.savedExitRequiresTouchID()
         mouseMovementExitArmedAt = Date().addingTimeInterval(0.35)
 
         eventMonitor = NSEvent.addLocalMonitorForEvents(
@@ -422,20 +435,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         ) { event in
             switch event.type {
             case .keyDown where Self.shouldExitForKey(event, shortcut: exitShortcut):
-                self.stopScreensaver()
+                self.requestScreensaverExit(source: .keyboard)
                 return nil
             case .flagsChanged where Self.shouldExitForModifier(event, shortcut: exitShortcut):
-                self.stopScreensaver()
+                self.requestScreensaverExit(source: .modifier)
                 return nil
             case .leftMouseDown, .rightMouseDown, .otherMouseDown, .scrollWheel:
                 guard self.shouldExitForMouseInput() else {
                     return event
                 }
 
-                self.stopScreensaver()
+                self.requestScreensaverExit(source: .mouseInput)
                 return nil
             case .mouseMoved where self.shouldExitForMouseMovement():
-                self.stopScreensaver()
+                self.requestScreensaverExit(source: .mouseMovement)
                 return nil
             default:
                 return event
@@ -447,7 +460,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 return false
             }
 
-            self?.stopScreensaver()
+            self?.requestScreensaverExit(source: .keyboard)
             return true
         }
 
@@ -456,7 +469,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 return false
             }
 
-            self?.stopScreensaver()
+            self?.requestScreensaverExit(source: .modifier)
             return true
         }
 
@@ -465,7 +478,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 return
             }
 
-            self?.stopScreensaver()
+            self?.requestScreensaverExit(source: .mouseInput)
         }
 
         let mouseMovementExitHandler: () -> Void = { [weak self] in
@@ -473,7 +486,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 return
             }
 
-            self?.stopScreensaver()
+            self?.requestScreensaverExit(source: .mouseMovement)
         }
 
         for screen in NSScreen.screens {
@@ -510,6 +523,65 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
 
+    private func requestScreensaverExit(source: ExitRequestSource) {
+        guard exitRequiresTouchID else {
+            stopScreensaver()
+            return
+        }
+
+        guard !touchIDAuthenticationInProgress else {
+            return
+        }
+
+        let context = LAContext()
+        context.localizedCancelTitle = "Stay in Matrix"
+
+        var error: NSError?
+        guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) else {
+            NSSound.beep()
+            exitRequiresTouchID = false
+            stopScreensaver()
+            return
+        }
+
+        touchIDAuthenticationInProgress = true
+        context.evaluatePolicy(
+            .deviceOwnerAuthentication,
+            localizedReason: "Authenticate with Touch ID or your Mac password to exit Matrix Screensaver."
+        ) { [weak self] success, error in
+            DispatchQueue.main.async {
+                guard let self else {
+                    return
+                }
+
+                self.touchIDAuthenticationInProgress = false
+                if success {
+                    self.stopScreensaver()
+                } else {
+                    self.handleAuthenticationFailure(error, source: source)
+                }
+            }
+        }
+    }
+
+    private func handleAuthenticationFailure(_ error: Error?, source: ExitRequestSource) {
+        if source == .mouseMovement {
+            mouseMovementExitArmedAt = Date().addingTimeInterval(1.0)
+        }
+
+        guard let laError = error as? LAError else {
+            return
+        }
+
+        switch laError.code {
+        case .biometryNotAvailable, .biometryNotEnrolled, .passcodeNotSet, .notInteractive:
+            exitRequiresTouchID = false
+            NSSound.beep()
+        default:
+            break
+        }
+    }
+
     private func stopScreensaver() {
         cleanupScreensaver()
         NSCursor.unhide()
@@ -542,7 +614,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     private func showSettings() {
         let settingsWindow = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 420, height: 328),
+            contentRect: NSRect(x: 0, y: 0, width: 420, height: 366),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -608,19 +680,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let defaults = Self.matrixDefaults()
         defaults?.synchronize()
 
-        let root = NSView(frame: NSRect(x: 0, y: 0, width: 420, height: 328))
+        let root = NSView(frame: NSRect(x: 0, y: 0, width: 420, height: 366))
 
         let fadeCheckbox = NSButton(checkboxWithTitle: "3D fade", target: nil, action: nil)
         fadeCheckbox.state = defaults?.bool(forKey: "3DFade") == true ? .on : .off
-        fadeCheckbox.frame = NSRect(x: 24, y: 276, width: 160, height: 24)
+        fadeCheckbox.frame = NSRect(x: 24, y: 314, width: 160, height: 24)
         root.addSubview(fadeCheckbox)
         self.fadeCheckbox = fadeCheckbox
 
         let sizeLabel = NSTextField(labelWithString: "Glyph Size:")
-        sizeLabel.frame = NSRect(x: 24, y: 234, width: 100, height: 20)
+        sizeLabel.frame = NSRect(x: 24, y: 272, width: 100, height: 20)
         root.addSubview(sizeLabel)
 
-        let cellSizePopup = NSPopUpButton(frame: NSRect(x: 144, y: 228, width: 150, height: 28), pullsDown: false)
+        let cellSizePopup = NSPopUpButton(frame: NSRect(x: 144, y: 266, width: 150, height: 28), pullsDown: false)
         cellSizePopup.addItem(withTitle: "Small")
         cellSizePopup.lastItem?.tag = 8
         cellSizePopup.addItem(withTitle: "Medium")
@@ -633,23 +705,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         self.cellSizePopup = cellSizePopup
 
         let shortcutLabel = NSTextField(labelWithString: "Exit Shortcut:")
-        shortcutLabel.frame = NSRect(x: 24, y: 190, width: 110, height: 20)
+        shortcutLabel.frame = NSRect(x: 24, y: 228, width: 110, height: 20)
         root.addSubview(shortcutLabel)
 
-        let shortcutRecorder = ShortcutRecorderButton(frame: NSRect(x: 144, y: 184, width: 180, height: 30))
+        let shortcutRecorder = ShortcutRecorderButton(frame: NSRect(x: 144, y: 222, width: 180, height: 30))
         shortcutRecorder.shortcut = Self.savedExitShortcut()
         root.addSubview(shortcutRecorder)
         self.shortcutRecorder = shortcutRecorder
 
         let resetShortcutButton = NSButton(title: "Reset", target: self, action: #selector(resetExitShortcut(_:)))
-        resetShortcutButton.frame = NSRect(x: 326, y: 184, width: 64, height: 30)
+        resetShortcutButton.frame = NSRect(x: 326, y: 222, width: 64, height: 30)
         root.addSubview(resetShortcutButton)
 
         let mouseMovementCheckbox = NSButton(checkboxWithTitle: "Exit on mouse movement", target: nil, action: nil)
         mouseMovementCheckbox.state = Self.savedExitOnMouseMovement(defaults: defaults) ? .on : .off
-        mouseMovementCheckbox.frame = NSRect(x: 24, y: 146, width: 240, height: 24)
+        mouseMovementCheckbox.frame = NSRect(x: 24, y: 184, width: 240, height: 24)
         root.addSubview(mouseMovementCheckbox)
         self.mouseMovementCheckbox = mouseMovementCheckbox
+
+        let touchIDCheckbox = NSButton(checkboxWithTitle: "Require Touch ID or Mac password to exit", target: nil, action: nil)
+        touchIDCheckbox.state = Self.savedExitRequiresTouchID(defaults: defaults) ? .on : .off
+        touchIDCheckbox.frame = NSRect(x: 24, y: 146, width: 330, height: 24)
+        touchIDCheckbox.isEnabled = Self.canAuthenticateForExit()
+        if !touchIDCheckbox.isEnabled {
+            touchIDCheckbox.state = .off
+        }
+        root.addSubview(touchIDCheckbox)
+        self.touchIDCheckbox = touchIDCheckbox
 
         let colorsLabel = NSTextField(labelWithString: "Colors:")
         colorsLabel.frame = NSRect(x: 24, y: 102, width: 100, height: 20)
@@ -683,6 +765,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         defaults.set(fadeCheckbox?.state == .on, forKey: "3DFade")
         defaults.set(cellSizePopup?.selectedTag() ?? 16, forKey: "CellSize")
         defaults.set(mouseMovementCheckbox?.state != .off, forKey: exitOnMouseMovementKey)
+        defaults.set(touchIDCheckbox?.state == .on && Self.canAuthenticateForExit(), forKey: exitRequiresTouchIDKey)
 
         if let shortcut = shortcutRecorder?.shortcut {
             defaults.set(Int(shortcut.keyCode), forKey: exitShortcutKeyCodeKey)
@@ -771,6 +854,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
 
         return defaults.bool(forKey: exitOnMouseMovementKey)
+    }
+
+    private static func savedExitRequiresTouchID(defaults: UserDefaults? = matrixDefaults()) -> Bool {
+        guard let defaults else {
+            return false
+        }
+
+        defaults.synchronize()
+        guard defaults.object(forKey: exitRequiresTouchIDKey) != nil else {
+            return false
+        }
+
+        return defaults.bool(forKey: exitRequiresTouchIDKey)
+    }
+
+    private static func canAuthenticateForExit() -> Bool {
+        let context = LAContext()
+        var error: NSError?
+        return context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error)
     }
 
     private static func shouldExitForKey(_ event: NSEvent, shortcut: ExitShortcut?) -> Bool {

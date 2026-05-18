@@ -43,7 +43,7 @@ Menu actions:
 - `Settings...`: opens the standalone settings panel.
 - `Quit`: exits the menu bar app.
 
-When Matrix is running, the configured exit shortcut stops it. If no custom shortcut is configured, any key exits by default and modifier keys also exit. Mouse input exit, including movement, clicks, and scroll events, can be enabled or disabled in Settings. The menu bar app remains active.
+When Matrix is running, the configured exit shortcut stops it. If no custom shortcut is configured, any key exits by default and modifier keys also exit. Mouse input exit, including movement, clicks, and scroll events, can be enabled or disabled in Settings. Touch ID or Mac password authentication can also be required before an exit trigger is accepted. The menu bar app remains active.
 
 ## Settings
 
@@ -61,8 +61,9 @@ Currently supported:
 - Exit keyboard shortcut: record a custom modifier + key combination, such as Command + M.
 - Reset shortcut: removes the custom shortcut and restores the default any-key exit behavior.
 - Mouse input exit: enables or disables exiting with mouse movement, clicks, and scroll events.
+- Touch ID or Mac password exit: requires macOS user authentication before an exit trigger closes Matrix.
 
-When Matrix is running, the configured shortcut exits the fullscreen animation. If no custom shortcut is configured, any key exits by default and modifier keys also exit. Mouse input exit, including movement, clicks, and scroll events, can be enabled or disabled.
+When Matrix is running, the configured shortcut exits the fullscreen animation. If no custom shortcut is configured, any key exits by default and modifier keys also exit. Mouse input exit, including movement, clicks, and scroll events, can be enabled or disabled. When authentication exit is enabled, the same exit triggers first show the macOS authentication prompt. This is only an app-level exit gate; use the macOS lock screen for real access control.
 
 ## Build From Source
 
@@ -137,24 +138,24 @@ Monroe Williams has granted permission to include the original `Matrix.saver` in
 
 # Matrix Screensaver Standalone - Italiano
 
-# Wrapper macOS standalone per lo screensaver Matrix di Monroe Williams
+Wrapper standalone per macOS dello screensaver Matrix di Monroe Williams.
 
-Questo progetto NON sostituisce il motore grafico originale. Fornisce invece una piccola app Cocoa che funge da wrapper per incorporare e avviare il `Matrix.saver` originale come una normale applicazione o utility nella barra dei menu, senza doverlo installare dalle Impostazioni di Sistema come un classico screensaver.
+Questo progetto **non** sostituisce il motore grafico originale. Fornisce una piccola app Cocoa che incorpora e avvia il `Matrix.saver` originale come normale app con utilità nella barra dei menu, senza installarlo dalle Impostazioni di Sistema come salvaschermo classico.
 
 Progetto originale: <https://github.com/monroewilliams/MatrixDownload>
 
-Il repository dei sorgenti esclude intenzionalmente il `Matrix.saver` di Monroe Williams. Per compilare dal codice sorgente, è necessario scaricarlo dal progetto originale. I file DMG delle release possono invece includere il `.saver` originale, grazie all'autorizzazione concessa da Monroe.
+Il repository sorgente non include intenzionalmente il `Matrix.saver` di Monroe Williams. Per compilare da sorgente, scaricalo dal progetto originale. I DMG pubblicati possono includere il `.saver` originale con il permesso di Monroe.
 
 ## Motivazione
 
-Le versioni recenti di macOS eseguono gli screensaver di terze parti tramite il processo di sistema `legacyScreenSaver`. Il progetto Matrix originale riporta alcune instabilità di macOS legate a questo processo, tra cui un consumo anomalo e crescente di CPU o memoria in seguito all'avvio di screensaver legacy o di terze parti. Il problema si verifica sulle versioni recenti di macOS e non sembra essere limitato esclusivamente all'architettura Apple Silicon.
+Le versioni recenti di macOS eseguono gli screensaver di terze parti tramite il processo Apple `legacyScreenSaver`. Il progetto originale Matrix documenta instabilità lato Apple intorno a quel processo, inclusi casi in cui CPU o memoria possono crescere dopo l'avvio di salvaschermi legacy o di terze parti. Il problema è stato osservato su versioni moderne di macOS con salvaschermi legacy/di terze parti e non va descritto come certamente limitato ad Apple Silicon.
 
 Questo wrapper aggira il problema:
 
-- caricando direttamente `Matrix.saver` da un normale processo applicativo;
-- creando finestre a schermo intero e senza bordi su tutti i monitor;
-- fornendo una piccola finestra dedicata per le impostazioni;
-- rimanendo accessibile direttamente dalla barra dei menu di macOS.
+- carica direttamente `Matrix.saver` da un normale processo dell'app;
+- crea finestre a schermo intero senza bordi su tutti gli schermi;
+- espone le impostazioni con una piccola finestra propria;
+- può restare disponibile dalla barra dei menu di macOS.
 
 ## Download e Installazione
 
@@ -177,14 +178,14 @@ Comparirà una `M` nella barra dei menu di macOS.
 Azioni disponibili:
 
 - `Start Matrix`: avvia l'animazione a schermo intero.
-- `Settings...`: apre il pannello indipendente delle impostazioni.
-- `Quit`: chiude l'applicazione dalla barra dei menu.
+- `Settings...`: apre il pannello delle impostazioni standalone.
+- `Quit`: chiude l'app nella barra dei menu.
 
-Mentre Matrix è in esecuzione, è possibile interromperlo utilizzando la scorciatoia da tastiera configurata. Se non è stata impostata alcuna scorciatoia personalizzata, per impostazione predefinita l'animazione si chiuderà premendo qualsiasi tasto (inclusi i tasti modificatori). L'interruzione dell'animazione tramite mouse (movimento, clic o scorrimento) può essere abilitata o disabilitata dalle Impostazioni. L'app nella barra dei menu rimarrà comunque attiva.
+Quando Matrix è in esecuzione, la scorciatoia di uscita configurata lo ferma. Se non è configurata una scorciatoia personalizzata, qualsiasi tasto esce per impostazione predefinita, inclusi i tasti modificatori. L'uscita tramite mouse, inclusi movimento, clic e scorrimento, si può abilitare o disabilitare nelle impostazioni. Si può anche richiedere l'autenticazione con Touch ID o password del Mac prima di accettare un comando di uscita. L'app nella barra dei menu resta attiva.
 
 ## Impostazioni
 
-Il wrapper salva le impostazioni nello stesso modulo `ScreenSaverDefaults` utilizzato dallo screensaver originale:
+Il wrapper scrive le impostazioni nello stesso modulo `ScreenSaverDefaults` usato dallo screensaver originale:
 
 ```text
 org.indirect.screensaver.Matrix
@@ -192,14 +193,15 @@ org.indirect.screensaver.Matrix
 
 Impostazioni supportate:
 
-- **3D fade (Dissolvenza 3D)**: abilita o disabilita l'effetto di dissolvenza 3D originale.
-- **Dimensione dei glifi (Glyph size)**: Piccolo (Small) / Medio (Medium) / Grande (Large).
-- **Colori dei glifi**: colore primario, secondario e di evidenziazione (highlight) utilizzati nell'animazione.
-- **Scorciatoia da tastiera per uscire**: permette di registrare una combinazione tasto modificatore + tasto (es. Command + M).
-- **Ripristino scorciatoia (Reset shortcut)**: rimuove la scorciatoia personalizzata e ripristina l'uscita predefinita con qualsiasi tasto.
-- **Uscita tramite mouse**: abilita o disabilita la chiusura dell'animazione tramite movimento del mouse, clic e scorrimento.
+- `3D fade`: abilita o disabilita l'effetto 3D fade originale.
+- Dimensione dei glifi: Small / Medium / Large.
+- Tre colori dei glifi: colore primario, secondario e di evidenziazione usati dall'animazione.
+- Scorciatoia da tastiera per uscire: registra una combinazione modificatore + tasto, per esempio Command + M.
+- Reset scorciatoia: rimuove la scorciatoia personalizzata e ripristina l'uscita predefinita con qualsiasi tasto.
+- Uscita tramite mouse: abilita o disabilita l'uscita con movimento, clic e scorrimento.
+- Uscita con Touch ID o password del Mac: richiede l'autenticazione utente macOS prima di chiudere Matrix.
 
-> **Nota:** Durante l'esecuzione, la scorciatoia configurata interrompe l'animazione a schermo intero. Se non ne è configurata una, la pressione di qualsiasi tasto chiuderà l'animazione di default. È possibile configurare in modo indipendente anche la reazione agli input del mouse.
+Quando Matrix è in esecuzione, la scorciatoia configurata chiude l'animazione a schermo intero. Se non è configurata una scorciatoia personalizzata, qualsiasi tasto esce per impostazione predefinita, inclusi i tasti modificatori. L'uscita tramite mouse, inclusi movimento, clic e scorrimento, si può abilitare o disabilitare. Quando l'uscita con autenticazione è abilitata, gli stessi comandi mostrano prima il prompt di autenticazione macOS. Questa è solo una protezione a livello di app; per un vero controllo degli accessi usa il blocco schermo di macOS.
 
 ## Compilazione dal Codice Sorgente
 
@@ -208,7 +210,7 @@ Requisiti:
 - macOS
 - Xcode Command Line Tools
 
-Questo repository esclude volutamente il `Matrix.saver` originale dal controllo di versione. Scaricalo dal progetto originale di Monroe Williams e posiziona il bundle nella cartella principale (root) del repository:
+Questo repository tiene il `Matrix.saver` originale fuori dal controllo sorgente. Scaricalo dal progetto originale di Monroe Williams e metti il bundle nella radice del repository:
 
 ```text
 Matrix.saver
@@ -246,16 +248,16 @@ Lo script incluso esegue una firma ad-hoc:
 codesign --force --sign - "Matrix Screensaver.app"
 ```
 
-Per una distribuzione pubblica senza avvisi da parte di Gatekeeper, è necessario firmare il pacchetto con un certificato Apple Developer ID e far autenticare (notarize) l'app e il file DMG.
+Per una distribuzione pubblica senza avvisi Gatekeeper, firma con un certificato Apple Developer ID e notarizza app e DMG.
 
 ## Riconoscimenti
 
 Il motore grafico dello screensaver Matrix è stato creato da Monroe Williams:
 <https://github.com/monroewilliams/MatrixDownload>
 
-Questo repository fornisce esclusivamente un launcher standalone, un wrapper per la barra dei menu, la gestione delle impostazioni, l'icona dell'applicazione e la pacchettizzazione in formato DMG per lo screensaver originale.
+Questo repository fornisce launcher standalone, wrapper per la barra dei menu, gestione delle impostazioni, icona dell'app e packaging DMG intorno allo screensaver originale.
 
-Si prega di non contattare Monroe Williams per problemi relativi a questa app wrapper. I bug del wrapper, la pacchettizzazione, il comportamento della barra dei menu, l'interfaccia delle impostazioni e la distribuzione sono gestiti unicamente da questo progetto.
+Non contattare Monroe Williams per problemi con questa app wrapper. Bug del wrapper, packaging, comportamento nella barra dei menu, interfaccia delle impostazioni e distribuzione sono gestiti da questo progetto.
 
 ## Fork o Repository Separato?
 
@@ -265,4 +267,4 @@ Effettuare un fork di `monroewilliams/MatrixDownload` avrebbe senso solo qualora
 
 ## Nota sulla Licenza / Ridistribuzione
 
-Monroe Williams ha concesso il permesso di includere il `Matrix.saver` originale nel pacchetto di questo wrapper. Si prega di mantenere chiara l'attribuzione al progetto originale e di specificare che il supporto tecnico per questa app wrapper viene gestito in questa sede, e non dall'autore dello screensaver originale.
+Monroe Williams ha dato il permesso di includere il `Matrix.saver` originale nel pacchetto di questo wrapper. Mantieni chiara l'attribuzione al progetto originale e specifica che il supporto per l'app wrapper viene gestito qui, non dall'autore dello screensaver originale.

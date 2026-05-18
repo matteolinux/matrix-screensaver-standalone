@@ -12,19 +12,21 @@ if [[ ! -d "$SAVER_BUNDLE" ]]; then
   exit 1
 fi
 
-if [[ ! -x "$HOST_BINARY" || "$HOST_SOURCE" -nt "$HOST_BINARY" ]]; then
+if [[ ! -x "$HOST_BINARY" || "$HOST_SOURCE" -nt "$HOST_BINARY" || "$0" -nt "$HOST_BINARY" ]]; then
   BUILD_DIR="$(mktemp -d)"
   trap 'rm -rf "$BUILD_DIR"' EXIT
 
   xcrun swiftc -target "arm64-apple-macosx$MACOS_DEPLOYMENT_TARGET" "$HOST_SOURCE" \
     -o "$BUILD_DIR/matrix-screensaver-host-arm64" \
     -framework Cocoa \
-    -framework ScreenSaver
+    -framework ScreenSaver \
+    -framework LocalAuthentication
 
   xcrun swiftc -target "x86_64-apple-macosx$MACOS_DEPLOYMENT_TARGET" "$HOST_SOURCE" \
     -o "$BUILD_DIR/matrix-screensaver-host-x86_64" \
     -framework Cocoa \
-    -framework ScreenSaver
+    -framework ScreenSaver \
+    -framework LocalAuthentication
 
   xcrun lipo -create \
     "$BUILD_DIR/matrix-screensaver-host-arm64" \
