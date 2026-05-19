@@ -15,7 +15,7 @@ Recent macOS versions run third-party `.saver` plugins through Apple's `legacySc
 This wrapper avoids that path:
 
 - it loads `Matrix.saver` directly from a normal app process;
-- it creates fullscreen borderless windows on all screens;
+- it starts one fullscreen helper per display, so multi-monitor setups do not share multiple `Matrix.saver` render instances in one process;
 - it exposes settings through its own small settings window;
 - it can stay available from the macOS menu bar.
 
@@ -44,6 +44,8 @@ Menu actions:
 - `Quit`: exits the menu bar app.
 
 When Matrix is running, the configured exit shortcut stops it. If no custom shortcut is configured, any key exits by default and modifier keys also exit. Mouse input exit, including movement, clicks, and scroll events, can be enabled or disabled in Settings. Touch ID or Mac password authentication can also be required before an exit trigger is accepted. The menu bar app remains active.
+
+On multi-display setups, the menu bar app launches a separate fullscreen helper for each display. Exiting from any display closes the full Matrix session across all monitors.
 
 ## Settings
 
@@ -154,7 +156,7 @@ Le versioni recenti di macOS eseguono gli screensaver di terze parti tramite il 
 Questo wrapper aggira il problema:
 
 - carica direttamente `Matrix.saver` da un normale processo dell'app;
-- crea finestre a schermo intero senza bordi su tutti gli schermi;
+- avvia un helper a schermo intero separato per ogni monitor, evitando piu istanze render di `Matrix.saver` nello stesso processo;
 - espone le impostazioni con una piccola finestra propria;
 - può restare disponibile dalla barra dei menu di macOS.
 
@@ -183,6 +185,8 @@ Azioni disponibili:
 - `Quit`: chiude l'app nella barra dei menu.
 
 Quando Matrix è in esecuzione, la scorciatoia di uscita configurata lo ferma. Se non è configurata una scorciatoia personalizzata, qualsiasi tasto esce per impostazione predefinita, inclusi i tasti modificatori. L'uscita tramite mouse, inclusi movimento, clic e scorrimento, si può abilitare o disabilitare nelle impostazioni. Si può anche richiedere l'autenticazione con Touch ID o password del Mac prima di accettare un comando di uscita. L'app nella barra dei menu resta attiva.
+
+Su configurazioni multi-monitor, l'app nella barra dei menu avvia un helper fullscreen separato per ogni display. L'uscita da qualsiasi display chiude l'intera sessione Matrix su tutti i monitor.
 
 ## Impostazioni
 

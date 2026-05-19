@@ -1,4 +1,5 @@
 import Cocoa
+import CoreGraphics
 import LocalAuthentication
 import ScreenSaver
 
@@ -240,6 +241,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var childProcesses: [Process] = []
     private var settingsView: ScreenSaverView?
     private var settingsWindow: NSWindow?
+    private var saverURL: URL?
+    private var targetDisplayID: CGDirectDisplayID?
     private var fadeCheckbox: NSButton?
     private var minorInstabilityCheckbox: NSButton?
     private var cellSizePopup: NSPopUpButton?
@@ -255,6 +258,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         let launchOptions = Self.launchOptions()
         menuBarMode = launchOptions.menuBar
+        saverURL = launchOptions.saverURL
+        targetDisplayID = launchOptions.displayID
+
         let saverURL = launchOptions.saverURL
         guard let bundle = Bundle(url: saverURL) else {
             fail("Cannot open bundle at \(saverURL.path)")
@@ -323,7 +329,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     @objc private func startFromMenu(_ sender: Any?) {
-        launchHelper(showSettings: false)
+        launchDisplayHelpers()
     }
 
     @objc private func openSettingsFromMenu(_ sender: Any?) {
@@ -369,7 +375,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         statusItem = item
     }
 
-    private func launchHelper(showSettings: Bool) {
+    private func launchHelper(showSettings: Bool, displayID: CGDirectDisplayID? = nil, coordinateExit: Bool = false) {
         guard let executableURL = Bundle.main.executableURL else {
             return
         }
@@ -382,7 +388,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             arguments.append("--settings")
         }
 
-        if let saverURL = Self.availableSaverURL() {
+        if let displayID {
+            arguments.append("--display-id")
+            arguments.append(String(displayID))
+        }
+
+        if let saverURL = self.saverURL ?? Self.availableSaverURL() {
             arguments.append(saverURL.path)
         }
 
@@ -393,8 +404,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                     return
                 }
 
+                if coordinateExit {
+                    for childProcess in self.childProcesses where childProcess !== process && childProcess.isRunning {
+                        childProcess.terminate()
+                    }
+                }
+
                 self.childProcesses.removeAll { $0 === process }
                 self.ensureMenuBarItem()
+                if !self.menuBarMode && self.windows.isEmpty && self.childProcesses.isEmpty {
+                    self.allowQuit = true
+                    NSApp.terminate(nil)
+                }
             }
         }
 
@@ -403,6 +424,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             childProcesses.append(process)
         } catch {
             fputs("Matrix launcher error: Cannot launch helper: \(error.localizedDescription)\n", stderr)
+        }
+    }
+
+    private func launchDisplayHelpers() {
+        let screens = NSScreen.screens
+        guard !screens.isEmpty else {
+            fail("No displays available")
+            return
+        }
+
+        if screens.count == 1, let displayID = Self.displayID(for: screens[0]) {
+            launchHelper(showSettings: false, displayID: displayID, coordinateExit: true)
+            return
+        }
+
+        var launchedHelpers = 0
+        for screen in screens {
+            guard let displayID = Self.displayID(for: screen) else {
+                fputs("Matrix launcher warning: skipping display without NSScreenNumber: \(screen)\n", stderr)
+                continue
+            }
+
+            launchHelper(showSettings: false, displayID: displayID, coordinateExit: true)
+            launchedHelpers += 1
+        }
+
+        if launchedHelpers == 0 {
+            fail("Cannot determine display IDs for available screens")
         }
     }
 
@@ -423,6 +472,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         guard let saverClass else {
             fail("Screen saver class is not loaded")
+            return
+        }
+
+        if targetDisplayID == nil && NSScreen.screens.count > 1 {
+            launchDisplayHelpers()
             return
         }
 
@@ -493,7 +547,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             self?.requestScreensaverExit(source: .mouseMovement)
         }
 
-        for screen in NSScreen.screens {
+        let targetScreens = screensForCurrentLaunch()
+        guard !targetScreens.isEmpty else {
+            let displayDescription = targetDisplayID.map(String.init) ?? "all"
+            fail("No matching display for \(displayDescription)")
+            return
+        }
+
+        for screen in targetScreens {
             let frame = screen.frame
             let window = SaverWindow(
                 contentRect: frame,
@@ -587,6 +648,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     private func stopScreensaver() {
+        guard !windows.isEmpty || eventMonitor != nil else {
+            if !menuBarMode {
+                allowQuit = true
+                NSApp.terminate(nil)
+            }
+            return
+        }
+
         cleanupScreensaver()
         NSCursor.unhide()
 
@@ -943,14 +1012,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         NSApp.terminate(nil)
     }
 
-    private static func launchOptions() -> (showSettings: Bool, menuBar: Bool, saverURL: URL) {
+    private func screensForCurrentLaunch() -> [NSScreen] {
+        guard let targetDisplayID else {
+            return NSScreen.screens
+        }
+
+        return NSScreen.screens.filter { Self.displayID(for: $0) == targetDisplayID }
+    }
+
+    private static func displayID(for screen: NSScreen) -> CGDirectDisplayID? {
+        screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID
+    }
+
+    private static func launchOptions() -> (
+        showSettings: Bool,
+        menuBar: Bool,
+        saverURL: URL,
+        displayID: CGDirectDisplayID?
+    ) {
         var showSettings = false
         var saverPath: String?
+        var displayID: CGDirectDisplayID?
 
-        for argument in CommandLine.arguments.dropFirst() {
+        var arguments = Array(CommandLine.arguments.dropFirst())
+        while !arguments.isEmpty {
+            let argument = arguments.removeFirst()
             switch argument {
             case "--settings", "-s":
                 showSettings = true
+            case "--display-id":
+                if let value = arguments.first {
+                    arguments.removeFirst()
+                    displayID = CGDirectDisplayID(value)
+                }
             case let psnArgument where psnArgument.hasPrefix("-psn_"):
                 continue
             default:
@@ -968,10 +1062,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let menuBar = !showSettings && !hasExplicitSaverPath && Bundle.main.bundleURL.pathExtension == "app"
 
         if let saverPath {
-            return (showSettings, menuBar, URL(fileURLWithPath: saverPath))
+            return (showSettings, menuBar, URL(fileURLWithPath: saverPath), displayID)
         }
 
-        return (showSettings, menuBar, availableSaverURL() ?? currentDirectorySaverURL())
+        return (showSettings, menuBar, availableSaverURL() ?? currentDirectorySaverURL(), displayID)
     }
 
     private static func bundledSaverURL() -> URL? {
