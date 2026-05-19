@@ -241,6 +241,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var settingsView: ScreenSaverView?
     private var settingsWindow: NSWindow?
     private var fadeCheckbox: NSButton?
+    private var minorInstabilityCheckbox: NSButton?
     private var cellSizePopup: NSPopUpButton?
     private var shortcutRecorder: ShortcutRecorderButton?
     private var mouseMovementCheckbox: NSButton?
@@ -348,8 +349,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
 
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        item.button?.title = "M"
-        item.button?.toolTip = "Matrix Screensaver"
+        if let button = item.button {
+            button.title = "M"
+            button.font = NSFont.systemFont(ofSize: 16, weight: .semibold)
+            button.toolTip = "Matrix Screensaver"
+        }
 
         let menu = NSMenu()
         menu.addItem(NSMenuItem(title: "Start Matrix", action: #selector(startFromMenu(_:)), keyEquivalent: ""))
@@ -614,7 +618,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     private func showSettings() {
         let settingsWindow = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 420, height: 366),
+            contentRect: NSRect(x: 0, y: 0, width: 420, height: 396),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -680,19 +684,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let defaults = Self.matrixDefaults()
         defaults?.synchronize()
 
-        let root = NSView(frame: NSRect(x: 0, y: 0, width: 420, height: 366))
+        let root = NSView(frame: NSRect(x: 0, y: 0, width: 420, height: 396))
 
         let fadeCheckbox = NSButton(checkboxWithTitle: "3D fade", target: nil, action: nil)
         fadeCheckbox.state = defaults?.bool(forKey: "3DFade") == true ? .on : .off
-        fadeCheckbox.frame = NSRect(x: 24, y: 314, width: 160, height: 24)
+        fadeCheckbox.frame = NSRect(x: 24, y: 344, width: 160, height: 24)
         root.addSubview(fadeCheckbox)
         self.fadeCheckbox = fadeCheckbox
 
+        let minorInstabilityCheckbox = NSButton(checkboxWithTitle: "Minor instability", target: nil, action: nil)
+        minorInstabilityCheckbox.state = defaults?.bool(forKey: "MinorInstability") == true ? .on : .off
+        minorInstabilityCheckbox.frame = NSRect(x: 204, y: 344, width: 170, height: 24)
+        root.addSubview(minorInstabilityCheckbox)
+        self.minorInstabilityCheckbox = minorInstabilityCheckbox
+
         let sizeLabel = NSTextField(labelWithString: "Glyph Size:")
-        sizeLabel.frame = NSRect(x: 24, y: 272, width: 100, height: 20)
+        sizeLabel.frame = NSRect(x: 24, y: 302, width: 100, height: 20)
         root.addSubview(sizeLabel)
 
-        let cellSizePopup = NSPopUpButton(frame: NSRect(x: 144, y: 266, width: 150, height: 28), pullsDown: false)
+        let cellSizePopup = NSPopUpButton(frame: NSRect(x: 144, y: 296, width: 150, height: 28), pullsDown: false)
         cellSizePopup.addItem(withTitle: "Small")
         cellSizePopup.lastItem?.tag = 8
         cellSizePopup.addItem(withTitle: "Medium")
@@ -705,27 +715,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         self.cellSizePopup = cellSizePopup
 
         let shortcutLabel = NSTextField(labelWithString: "Exit Shortcut:")
-        shortcutLabel.frame = NSRect(x: 24, y: 228, width: 110, height: 20)
+        shortcutLabel.frame = NSRect(x: 24, y: 258, width: 110, height: 20)
         root.addSubview(shortcutLabel)
 
-        let shortcutRecorder = ShortcutRecorderButton(frame: NSRect(x: 144, y: 222, width: 180, height: 30))
+        let shortcutRecorder = ShortcutRecorderButton(frame: NSRect(x: 144, y: 252, width: 180, height: 30))
         shortcutRecorder.shortcut = Self.savedExitShortcut()
         root.addSubview(shortcutRecorder)
         self.shortcutRecorder = shortcutRecorder
 
         let resetShortcutButton = NSButton(title: "Reset", target: self, action: #selector(resetExitShortcut(_:)))
-        resetShortcutButton.frame = NSRect(x: 326, y: 222, width: 64, height: 30)
+        resetShortcutButton.frame = NSRect(x: 326, y: 252, width: 64, height: 30)
         root.addSubview(resetShortcutButton)
 
         let mouseMovementCheckbox = NSButton(checkboxWithTitle: "Exit on mouse movement", target: nil, action: nil)
         mouseMovementCheckbox.state = Self.savedExitOnMouseMovement(defaults: defaults) ? .on : .off
-        mouseMovementCheckbox.frame = NSRect(x: 24, y: 184, width: 240, height: 24)
+        mouseMovementCheckbox.frame = NSRect(x: 24, y: 214, width: 240, height: 24)
         root.addSubview(mouseMovementCheckbox)
         self.mouseMovementCheckbox = mouseMovementCheckbox
 
         let touchIDCheckbox = NSButton(checkboxWithTitle: "Require Touch ID or Mac password to exit", target: nil, action: nil)
         touchIDCheckbox.state = Self.savedExitRequiresTouchID(defaults: defaults) ? .on : .off
-        touchIDCheckbox.frame = NSRect(x: 24, y: 146, width: 330, height: 24)
+        touchIDCheckbox.frame = NSRect(x: 24, y: 176, width: 330, height: 24)
         touchIDCheckbox.isEnabled = Self.canAuthenticateForExit()
         if !touchIDCheckbox.isEnabled {
             touchIDCheckbox.state = .off
@@ -734,12 +744,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         self.touchIDCheckbox = touchIDCheckbox
 
         let colorsLabel = NSTextField(labelWithString: "Colors:")
-        colorsLabel.frame = NSRect(x: 24, y: 102, width: 100, height: 20)
+        colorsLabel.frame = NSRect(x: 24, y: 132, width: 100, height: 20)
         root.addSubview(colorsLabel)
 
         colorWells = []
         for index in 0..<3 {
-            let well = NSColorWell(frame: NSRect(x: 144 + (index * 54), y: 94, width: 44, height: 28))
+            let well = NSColorWell(frame: NSRect(x: 144 + (index * 54), y: 124, width: 44, height: 28))
             well.color = Self.colorFromDefaults(defaults, key: "color\(index)") ?? Self.defaultColor(at: index)
             root.addSubview(well)
             colorWells.append(well)
@@ -763,6 +773,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
 
         defaults.set(fadeCheckbox?.state == .on, forKey: "3DFade")
+        defaults.set(minorInstabilityCheckbox?.state == .on, forKey: "MinorInstability")
         defaults.set(cellSizePopup?.selectedTag() ?? 16, forKey: "CellSize")
         defaults.set(mouseMovementCheckbox?.state != .off, forKey: exitOnMouseMovementKey)
         defaults.set(touchIDCheckbox?.state == .on && Self.canAuthenticateForExit(), forKey: exitRequiresTouchIDKey)

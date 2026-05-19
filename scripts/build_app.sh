@@ -57,6 +57,8 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
 	<key>CFBundleExecutable</key>
 	<string>MatrixScreensaverLauncher</string>
 	<key>CFBundleIconFile</key>
+	<string>MatrixAppIcon.icns</string>
+	<key>CFBundleIconName</key>
 	<string>MatrixAppIcon</string>
 	<key>CFBundleIdentifier</key>
 	<string>local.matrix.screensaver.launcher</string>

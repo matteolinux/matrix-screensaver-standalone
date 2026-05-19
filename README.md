@@ -56,6 +56,7 @@ org.indirect.screensaver.Matrix
 Currently supported:
 
 - `3D fade`: enables or disables the original 3D fade effect.
+- `Minor instability`: enables or disables the original occasional instability/anomaly effect.
 - Glyph size: Small / Medium / Large.
 - Three glyph colors: primary, secondary, and highlight colors used by the animation.
 - Exit keyboard shortcut: record a custom modifier + key combination, such as Command + M.
@@ -194,6 +195,7 @@ org.indirect.screensaver.Matrix
 Impostazioni supportate:
 
 - `3D fade`: abilita o disabilita l'effetto 3D fade originale.
+- `Minor instability`: abilita o disabilita l'effetto originale di instabilita/anomalia occasionale.
 - Dimensione dei glifi: Small / Medium / Large.
 - Tre colori dei glifi: colore primario, secondario e di evidenziazione usati dall'animazione.
 - Scorciatoia da tastiera per uscire: registra una combinazione modificatore + tasto, per esempio Command + M.
