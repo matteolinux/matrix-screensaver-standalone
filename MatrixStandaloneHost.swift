@@ -329,7 +329,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     @objc private func startFromMenu(_ sender: Any?) {
-        launchDisplayHelpers()
+        launchHelper(showSettings: false)
     }
 
     @objc private func openSettingsFromMenu(_ sender: Any?) {
@@ -475,12 +475,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             return
         }
 
-        if targetDisplayID == nil && NSScreen.screens.count > 1 {
-            launchDisplayHelpers()
-            return
-        }
-
         activateForUserInterface()
+        NSApp.presentationOptions = [.hideDock, .hideMenuBar]
         NSCursor.hide()
 
         let exitShortcut = Self.savedExitShortcut()
@@ -513,40 +509,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             }
         }
 
-        let keyboardExitHandler: (NSEvent) -> Bool = { [weak self] event in
-            guard Self.shouldExitForKey(event, shortcut: exitShortcut) else {
-                return false
-            }
-
-            self?.requestScreensaverExit(source: .keyboard)
-            return true
-        }
-
-        let modifierExitHandler: (NSEvent) -> Bool = { [weak self] event in
-            guard Self.shouldExitForModifier(event, shortcut: exitShortcut) else {
-                return false
-            }
-
-            self?.requestScreensaverExit(source: .modifier)
-            return true
-        }
-
-        let mouseExitHandler: () -> Void = { [weak self] in
-            guard self?.shouldExitForMouseInput() == true else {
-                return
-            }
-
-            self?.requestScreensaverExit(source: .mouseInput)
-        }
-
-        let mouseMovementExitHandler: () -> Void = { [weak self] in
-            guard self?.shouldExitForMouseMovement() == true else {
-                return
-            }
-
-            self?.requestScreensaverExit(source: .mouseMovement)
-        }
-
         let targetScreens = screensForCurrentLaunch()
         guard !targetScreens.isEmpty else {
             let displayDescription = targetDisplayID.map(String.init) ?? "all"
@@ -560,17 +522,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 contentRect: frame,
                 styleMask: [.borderless],
                 backing: .buffered,
-                defer: false,
-                screen: screen
+                defer: false
             )
-            window.level = .screenSaver
+            window.level = NSWindow.Level(rawValue: NSWindow.Level.screenSaver.rawValue - 1)
             window.backgroundColor = .black
             window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
             window.acceptsMouseMovedEvents = true
-            window.keyboardExitHandler = keyboardExitHandler
-            window.modifierExitHandler = modifierExitHandler
-            window.mouseExitHandler = mouseExitHandler
-            window.mouseMovementExitHandler = mouseMovementExitHandler
 
             guard let saverView = saverClass.init(frame: NSRect(origin: .zero, size: frame.size), isPreview: false) else {
                 fail("Cannot instantiate ScreenSaverView")
@@ -582,7 +539,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             window.contentView = saverView
             windows.append(window)
             saverViews.append(saverView)
-            window.makeKeyAndOrderFront(nil)
+            window.orderFrontRegardless()
             saverView.startAnimation()
             refreshSimulationPreferences(for: saverView)
         }
@@ -669,13 +626,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     private func cleanupScreensaver() {
         saverViews.forEach { $0.stopAnimation() }
-        windows.forEach { window in
-            window.keyboardExitHandler = nil
-            window.modifierExitHandler = nil
-            window.mouseExitHandler = nil
-            window.mouseMovementExitHandler = nil
-            window.close()
-        }
+        windows.forEach { $0.close() }
         saverViews.removeAll()
         windows.removeAll()
 
