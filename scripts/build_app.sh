@@ -31,12 +31,14 @@ trap 'rm -rf "$BUILD_DIR"' EXIT
 
 xcrun swiftc -target "arm64-apple-macosx$MACOS_DEPLOYMENT_TARGET" "$ROOT_DIR/MatrixStandaloneHost.swift" \
   -o "$BUILD_DIR/MatrixScreensaverLauncher-arm64" \
+  -framework ApplicationServices \
   -framework Cocoa \
   -framework ScreenSaver \
   -framework LocalAuthentication
 
 xcrun swiftc -target "x86_64-apple-macosx$MACOS_DEPLOYMENT_TARGET" "$ROOT_DIR/MatrixStandaloneHost.swift" \
   -o "$BUILD_DIR/MatrixScreensaverLauncher-x86_64" \
+  -framework ApplicationServices \
   -framework Cocoa \
   -framework ScreenSaver \
   -framework LocalAuthentication

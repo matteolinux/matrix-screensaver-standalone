@@ -1,3 +1,4 @@
+import ApplicationServices
 import Cocoa
 import CoreGraphics
 import LocalAuthentication
@@ -7,6 +8,7 @@ private let exitShortcutKeyCodeKey = "StandaloneExitShortcutKeyCode"
 private let exitShortcutModifierFlagsKey = "StandaloneExitShortcutModifierFlags"
 private let exitOnMouseMovementKey = "StandaloneExitOnMouseMovement"
 private let exitRequiresTouchIDKey = "StandaloneExitRequiresTouchID"
+private let startWithShortcutKey = "StandaloneStartWithShortcut"
 
 fileprivate enum ExitRequestSource {
     case keyboard
@@ -249,11 +251,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var shortcutRecorder: ShortcutRecorderButton?
     private var mouseMovementCheckbox: NSButton?
     private var touchIDCheckbox: NSButton?
+    private var startWithShortcutCheckbox: NSButton?
     private var colorWells: [NSColorWell] = []
     private var exitOnMouseMovement = true
     private var exitRequiresTouchID = false
     private var touchIDAuthenticationInProgress = false
     private var mouseMovementExitArmedAt = Date.distantPast
+    private var startWithShortcut = false
+    private var globalEventMonitor: Any?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let launchOptions = Self.launchOptions()
@@ -343,6 +348,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     private func showMenuBarItem() {
         ensureMenuBarItem()
+        startWithShortcut = Self.savedStartWithShortcut()
+        if startWithShortcut && !AXIsProcessTrusted() {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                self?.promptForAccessibilityAccess()
+            }
+        }
+        registerGlobalShortcutMonitor()
     }
 
     private func ensureMenuBarItem() {
@@ -475,13 +487,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             return
         }
 
+        if targetDisplayID == nil && NSScreen.screens.count > 1 {
+            launchDisplayHelpers()
+            return
+        }
+
+        unregisterGlobalShortcutMonitor()
         activateForUserInterface()
         NSApp.presentationOptions = [.hideDock, .hideMenuBar]
         NSCursor.hide()
 
+        NSApp.presentationOptions = [
+            .hideDock,
+            .hideMenuBar,
+            .disableProcessSwitching,
+            .disableForceQuit,
+            .disableSessionTermination
+        ]
+
         let exitShortcut = Self.savedExitShortcut()
         exitOnMouseMovement = Self.savedExitOnMouseMovement()
         exitRequiresTouchID = Self.savedExitRequiresTouchID()
+        startWithShortcut = Self.savedStartWithShortcut()
         mouseMovementExitArmedAt = Date().addingTimeInterval(0.35)
 
         eventMonitor = NSEvent.addLocalMonitorForEvents(
@@ -524,7 +551,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 backing: .buffered,
                 defer: false
             )
-            window.level = NSWindow.Level(rawValue: NSWindow.Level.screenSaver.rawValue - 1)
+            window.level = NSWindow.Level(rawValue: 999)
             window.backgroundColor = .black
             window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
             window.acceptsMouseMovedEvents = true
@@ -540,6 +567,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             windows.append(window)
             saverViews.append(saverView)
             window.orderFrontRegardless()
+            window.makeKey()
             saverView.startAnimation()
             refreshSimulationPreferences(for: saverView)
         }
@@ -614,10 +642,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
 
         cleanupScreensaver()
+        NSApp.presentationOptions = []
         NSCursor.unhide()
 
         if menuBarMode {
             ensureMenuBarItem()
+            registerGlobalShortcutMonitor()
             NSRunningApplication.current.activate(options: [])
         } else {
             NSApp.terminate(nil)
@@ -636,9 +666,66 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
 
+    private func registerGlobalShortcutMonitor() {
+        guard startWithShortcut, let shortcut = Self.savedExitShortcut() else {
+            if startWithShortcut {
+                fputs("Matrix launcher: global shortcut monitor skipped — no exit shortcut configured\n", stderr)
+            }
+            unregisterGlobalShortcutMonitor()
+            return
+        }
+
+        guard windows.isEmpty && childProcesses.isEmpty else {
+            fputs("Matrix launcher: global shortcut monitor skipped — screensaver already running\n", stderr)
+            return
+        }
+
+        guard AXIsProcessTrusted() else {
+            fputs("Matrix launcher: global shortcut monitor skipped — accessibility permissions not granted\n", stderr)
+            return
+        }
+
+        fputs("Matrix launcher: global shortcut monitor registered (\(shortcut.displayString))\n", stderr)
+        unregisterGlobalShortcutMonitor()
+
+        globalEventMonitor = NSEvent.addGlobalMonitorForEvents(
+            matching: [.keyDown]
+        ) { [weak self] event in
+            guard let self,
+                  Self.shouldExitForKey(event, shortcut: shortcut),
+                  self.windows.isEmpty,
+                  self.childProcesses.isEmpty else {
+                return
+            }
+
+            self.launchDisplayHelpers()
+        }
+    }
+
+    private func unregisterGlobalShortcutMonitor() {
+        if let monitor = globalEventMonitor {
+            NSEvent.removeMonitor(monitor)
+            globalEventMonitor = nil
+        }
+    }
+
+    private func promptForAccessibilityAccess() {
+        let alert = NSAlert()
+        alert.messageText = "Accessibility Access Required"
+        alert.informativeText = "To start Matrix Screensaver with your keyboard shortcut from any app, grant accessibility access to Matrix Screensaver in System Settings → Privacy & Security → Accessibility."
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "Open System Settings")
+        alert.addButton(withTitle: "Not Now")
+        if alert.runModal() == .alertFirstButtonReturn {
+            NSWorkspace.shared.open(
+                URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
+            )
+        }
+    }
+
     private func showSettings() {
         let settingsWindow = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 420, height: 396),
+            contentRect: NSRect(x: 0, y: 0, width: 420, height: 426),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -679,10 +766,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     @objc private func saveSettings(_ sender: Any?) {
         saveCustomSettings()
         closeSettingsWindow()
+        if menuBarMode {
+            let wantsShortcut = startWithShortcutCheckbox?.state == .on
+            startWithShortcut = wantsShortcut
+            if wantsShortcut && !AXIsProcessTrusted() {
+                promptForAccessibilityAccess()
+            }
+            registerGlobalShortcutMonitor()
+        }
     }
 
     @objc private func resetExitShortcut(_ sender: Any?) {
         shortcutRecorder?.shortcut = nil
+        startWithShortcutCheckbox?.isEnabled = false
+        startWithShortcutCheckbox?.state = .off
     }
 
     @objc private func cancelSettings(_ sender: Any?) {
@@ -704,7 +801,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let defaults = Self.matrixDefaults()
         defaults?.synchronize()
 
-        let root = NSView(frame: NSRect(x: 0, y: 0, width: 420, height: 396))
+        let root = NSView(frame: NSRect(x: 0, y: 0, width: 420, height: 426))
 
         let fadeCheckbox = NSButton(checkboxWithTitle: "3D fade", target: nil, action: nil)
         fadeCheckbox.state = defaults?.bool(forKey: "3DFade") == true ? .on : .off
@@ -749,13 +846,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         let mouseMovementCheckbox = NSButton(checkboxWithTitle: "Exit on mouse movement", target: nil, action: nil)
         mouseMovementCheckbox.state = Self.savedExitOnMouseMovement(defaults: defaults) ? .on : .off
-        mouseMovementCheckbox.frame = NSRect(x: 24, y: 214, width: 240, height: 24)
+        mouseMovementCheckbox.frame = NSRect(x: 24, y: 184, width: 240, height: 24)
         root.addSubview(mouseMovementCheckbox)
         self.mouseMovementCheckbox = mouseMovementCheckbox
 
+        let startWithShortcutCheckbox = NSButton(checkboxWithTitle: "Start Matrix with shortcut", target: nil, action: nil)
+        startWithShortcutCheckbox.state = defaults?.bool(forKey: startWithShortcutKey) == true ? .on : .off
+        startWithShortcutCheckbox.frame = NSRect(x: 24, y: 218, width: 270, height: 24)
+        startWithShortcutCheckbox.isEnabled = shortcutRecorder.shortcut != nil
+        root.addSubview(startWithShortcutCheckbox)
+        self.startWithShortcutCheckbox = startWithShortcutCheckbox
+
         let touchIDCheckbox = NSButton(checkboxWithTitle: "Require Touch ID or Mac password to exit", target: nil, action: nil)
         touchIDCheckbox.state = Self.savedExitRequiresTouchID(defaults: defaults) ? .on : .off
-        touchIDCheckbox.frame = NSRect(x: 24, y: 176, width: 330, height: 24)
+        touchIDCheckbox.frame = NSRect(x: 24, y: 146, width: 330, height: 24)
         touchIDCheckbox.isEnabled = Self.canAuthenticateForExit()
         if !touchIDCheckbox.isEnabled {
             touchIDCheckbox.state = .off
@@ -764,12 +868,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         self.touchIDCheckbox = touchIDCheckbox
 
         let colorsLabel = NSTextField(labelWithString: "Colors:")
-        colorsLabel.frame = NSRect(x: 24, y: 132, width: 100, height: 20)
+        colorsLabel.frame = NSRect(x: 24, y: 102, width: 100, height: 20)
         root.addSubview(colorsLabel)
 
         colorWells = []
         for index in 0..<3 {
-            let well = NSColorWell(frame: NSRect(x: 144 + (index * 54), y: 124, width: 44, height: 28))
+            let well = NSColorWell(frame: NSRect(x: 144 + (index * 54), y: 94, width: 44, height: 28))
             well.color = Self.colorFromDefaults(defaults, key: "color\(index)") ?? Self.defaultColor(at: index)
             root.addSubview(well)
             colorWells.append(well)
@@ -797,6 +901,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         defaults.set(cellSizePopup?.selectedTag() ?? 16, forKey: "CellSize")
         defaults.set(mouseMovementCheckbox?.state != .off, forKey: exitOnMouseMovementKey)
         defaults.set(touchIDCheckbox?.state == .on && Self.canAuthenticateForExit(), forKey: exitRequiresTouchIDKey)
+        defaults.set(startWithShortcutCheckbox?.state == .on, forKey: startWithShortcutKey)
 
         if let shortcut = shortcutRecorder?.shortcut {
             defaults.set(Int(shortcut.keyCode), forKey: exitShortcutKeyCodeKey)
@@ -885,6 +990,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
 
         return defaults.bool(forKey: exitOnMouseMovementKey)
+    }
+
+    private static func savedStartWithShortcut(defaults: UserDefaults? = matrixDefaults()) -> Bool {
+        guard let defaults else {
+            return false
+        }
+
+        defaults.synchronize()
+        return defaults.bool(forKey: startWithShortcutKey)
     }
 
     private static func savedExitRequiresTouchID(defaults: UserDefaults? = matrixDefaults()) -> Bool {
