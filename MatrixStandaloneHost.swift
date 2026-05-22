@@ -104,10 +104,13 @@ fileprivate struct ExitShortcut {
 }
 
 fileprivate final class ShortcutRecorderButton: NSButton {
+    var shortcutDidChange: ((ExitShortcut?) -> Void)?
+
     var shortcut: ExitShortcut? {
         didSet {
             isRecording = false
             updateTitle()
+            shortcutDidChange?(shortcut)
         }
     }
 
@@ -259,6 +262,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var mouseMovementExitArmedAt = Date.distantPast
     private var startWithShortcut = false
     private var globalEventMonitor: Any?
+    private var accessibilityRetryTimer: Timer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let launchOptions = Self.launchOptions()
@@ -300,6 +304,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        accessibilityRetryTimer?.invalidate()
         childProcesses.forEach { process in
             if process.isRunning {
                 process.terminate()
@@ -348,13 +353,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     private func showMenuBarItem() {
         ensureMenuBarItem()
-        startWithShortcut = Self.savedStartWithShortcut()
-        if startWithShortcut && !AXIsProcessTrusted() {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                self?.promptForAccessibilityAccess()
-            }
-        }
-        registerGlobalShortcutMonitor()
+        reloadShortcutMonitorFromDefaults(promptForAccessibility: true)
     }
 
     private func ensureMenuBarItem() {
@@ -398,6 +397,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         var arguments: [String] = []
         if showSettings {
             arguments.append("--settings")
+        } else {
+            arguments.append("--start")
         }
 
         if let displayID {
@@ -424,6 +425,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
                 self.childProcesses.removeAll { $0 === process }
                 self.ensureMenuBarItem()
+                if self.menuBarMode {
+                    self.reloadShortcutMonitorFromDefaults(promptForAccessibility: showSettings)
+                }
                 if !self.menuBarMode && self.windows.isEmpty && self.childProcesses.isEmpty {
                     self.allowQuit = true
                     NSApp.terminate(nil)
@@ -702,6 +706,51 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
 
+    private func reloadShortcutMonitorFromDefaults(promptForAccessibility: Bool) {
+        startWithShortcut = Self.savedStartWithShortcut()
+        if startWithShortcut && !AXIsProcessTrusted() {
+            if promptForAccessibility {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                    self?.promptForAccessibilityAccess()
+                }
+            }
+            scheduleAccessibilityRetry()
+        } else {
+            stopAccessibilityRetry()
+        }
+        registerGlobalShortcutMonitor()
+    }
+
+    private func scheduleAccessibilityRetry() {
+        guard accessibilityRetryTimer == nil else {
+            return
+        }
+
+        accessibilityRetryTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] timer in
+            guard let self else {
+                timer.invalidate()
+                return
+            }
+
+            guard self.startWithShortcut else {
+                self.stopAccessibilityRetry()
+                return
+            }
+
+            guard AXIsProcessTrusted() else {
+                return
+            }
+
+            self.stopAccessibilityRetry()
+            self.registerGlobalShortcutMonitor()
+        }
+    }
+
+    private func stopAccessibilityRetry() {
+        accessibilityRetryTimer?.invalidate()
+        accessibilityRetryTimer = nil
+    }
+
     private func unregisterGlobalShortcutMonitor() {
         if let monitor = globalEventMonitor {
             NSEvent.removeMonitor(monitor)
@@ -778,8 +827,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     @objc private func resetExitShortcut(_ sender: Any?) {
         shortcutRecorder?.shortcut = nil
-        startWithShortcutCheckbox?.isEnabled = false
-        startWithShortcutCheckbox?.state = .off
+        updateStartWithShortcutAvailability()
+    }
+
+    private func updateStartWithShortcutAvailability() {
+        let hasShortcut = shortcutRecorder?.shortcut != nil
+        startWithShortcutCheckbox?.isEnabled = hasShortcut
+        if !hasShortcut {
+            startWithShortcutCheckbox?.state = .off
+        }
     }
 
     @objc private func cancelSettings(_ sender: Any?) {
@@ -837,6 +893,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         let shortcutRecorder = ShortcutRecorderButton(frame: NSRect(x: 144, y: 252, width: 180, height: 30))
         shortcutRecorder.shortcut = Self.savedExitShortcut()
+        shortcutRecorder.shortcutDidChange = { [weak self] _ in
+            self?.updateStartWithShortcutAvailability()
+        }
         root.addSubview(shortcutRecorder)
         self.shortcutRecorder = shortcutRecorder
 
@@ -850,12 +909,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         root.addSubview(mouseMovementCheckbox)
         self.mouseMovementCheckbox = mouseMovementCheckbox
 
-        let startWithShortcutCheckbox = NSButton(checkboxWithTitle: "Start Matrix with shortcut", target: nil, action: nil)
+        let startWithShortcutCheckbox = NSButton(checkboxWithTitle: "Start Matrix using the exit shortcut", target: nil, action: nil)
         startWithShortcutCheckbox.state = defaults?.bool(forKey: startWithShortcutKey) == true ? .on : .off
-        startWithShortcutCheckbox.frame = NSRect(x: 24, y: 218, width: 270, height: 24)
-        startWithShortcutCheckbox.isEnabled = shortcutRecorder.shortcut != nil
+        startWithShortcutCheckbox.frame = NSRect(x: 24, y: 218, width: 340, height: 24)
         root.addSubview(startWithShortcutCheckbox)
         self.startWithShortcutCheckbox = startWithShortcutCheckbox
+        updateStartWithShortcutAvailability()
 
         let touchIDCheckbox = NSButton(checkboxWithTitle: "Require Touch ID or Mac password to exit", target: nil, action: nil)
         touchIDCheckbox.state = Self.savedExitRequiresTouchID(defaults: defaults) ? .on : .off
@@ -901,12 +960,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         defaults.set(cellSizePopup?.selectedTag() ?? 16, forKey: "CellSize")
         defaults.set(mouseMovementCheckbox?.state != .off, forKey: exitOnMouseMovementKey)
         defaults.set(touchIDCheckbox?.state == .on && Self.canAuthenticateForExit(), forKey: exitRequiresTouchIDKey)
-        defaults.set(startWithShortcutCheckbox?.state == .on, forKey: startWithShortcutKey)
-
         if let shortcut = shortcutRecorder?.shortcut {
+            defaults.set(startWithShortcutCheckbox?.state == .on, forKey: startWithShortcutKey)
             defaults.set(Int(shortcut.keyCode), forKey: exitShortcutKeyCodeKey)
             defaults.set(Int(shortcut.modifierFlags.rawValue), forKey: exitShortcutModifierFlagsKey)
         } else {
+            defaults.set(false, forKey: startWithShortcutKey)
             defaults.removeObject(forKey: exitShortcutKeyCodeKey)
             defaults.removeObject(forKey: exitShortcutModifierFlagsKey)
         }
@@ -1096,6 +1155,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         displayID: CGDirectDisplayID?
     ) {
         var showSettings = false
+        var explicitLaunchMode = false
         var saverPath: String?
         var displayID: CGDirectDisplayID?
 
@@ -1105,6 +1165,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             switch argument {
             case "--settings", "-s":
                 showSettings = true
+                explicitLaunchMode = true
+            case "--start":
+                showSettings = false
+                explicitLaunchMode = true
             case "--display-id":
                 if let value = arguments.first {
                     arguments.removeFirst()
@@ -1119,7 +1183,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             }
         }
 
-        if NSEvent.modifierFlags.contains(.option) {
+        if !explicitLaunchMode && NSEvent.modifierFlags.contains(.option) {
             showSettings = true
         }
 
